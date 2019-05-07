@@ -2,117 +2,211 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class MapGen : MonoBehaviour
+public static class MapGen
 {
-    #region prefabs
-    //****************
-    // PREFABS
-    //****************
-    [SerializeField]
-    GameObject m_mapPrefab;
-    [SerializeField]
-    GameObject m_roofPrefab;
-    [SerializeField]
-    GameObject m_wallPrefab2D;
-    [SerializeField]
-    GameObject m_wallPrefab3D;
-    [SerializeField]
-    GameObject m_floorPrefab;
-    #endregion
-
-    [Range(1, 200)]
-    public int m_rowCount;
-    [Range(1, 200)]
-    public int m_colCount;
-    public float m_nodeSize;
-
-    public int m_minAreaSize;
-    public int m_areaEdgeSize;
-
-    [Range(0, 100)]
-    public float m_fillChance;
-    [Range(1, 10)]
-    public int m_celAutomataIterCount;
-
-    public int m_minRoomSize;
-
-    public bool m_is3D;
-    public float m_wallSize;
-
-    private void Start()
+    public static MapData GenerateMapData(MapGenData mapGenParams)
     {
-        MapData mapData = CreateMapData();
-        CreateMapGOs(mapData);
+        MapData newMapData = new MapData(Vector3.zero, mapGenParams.m_rowCount, mapGenParams.m_colCount, mapGenParams.m_nodeSize);
+
+        if (mapGenParams.DoPartion)
+            PartitionMap(newMapData, mapGenParams.minPartitionSize);
+        if (mapGenParams.DoEdges)
+            AddAreaEdges(newMapData, mapGenParams.edgeSize);
+        if (mapGenParams.DoAddRandom)
+            AddRandom(newMapData, mapGenParams.fillChance);
+        if (mapGenParams.DoCellularAutomata)
+            CelularAutomata(newMapData, mapGenParams.cellAutomataIterCount);
+
+        return newMapData;
     }
 
-    public MapData CreateMapData(bool doPartition = true, bool doEdges = true, bool doCelAutomata = true, bool doRooms = true)
+    public static void PartitionMap(MapData mapData, int minAreaSize)
     {
-        CelAutomataMapGen celMapGen = CelAutomataMapGen.Instance;
-        MapData mapData = celMapGen.CreateMapData(m_rowCount, m_colCount, m_nodeSize);
+        List<MapArea> finishedAreas = new List<MapArea>();
+        List<MapArea> unfinishedSet = new List<MapArea>();
+        unfinishedSet = mapData.m_allAreas;
 
-        if (doPartition)
-            celMapGen.PartitionMap(mapData, m_minAreaSize);
-        if (doEdges)
-            celMapGen.AddAreaEdges(mapData, m_areaEdgeSize);
-        if (doCelAutomata)
+        while (unfinishedSet.Count > 0)
         {
-            print("AA");
-            celMapGen.AddRandom(mapData, m_fillChance);
-            celMapGen.CelularAutomata(mapData, m_celAutomataIterCount);
-        }
-        if (doRooms)
-            celMapGen.DetectAndUpdateRooms(mapData, m_minRoomSize);
+            MapArea currArea = unfinishedSet[unfinishedSet.Count - 1];
+            unfinishedSet.RemoveAt(unfinishedSet.Count - 1);
 
-        return mapData;
-    }
+            bool areMoreCols = currArea.ColCount > currArea.RowCount;
+            int bigger = (areMoreCols) ? currArea.ColCount : currArea.RowCount;
+            int smaller = (areMoreCols) ? currArea.RowCount : currArea.ColCount;
 
-    public Map CreateMapGOs(MapData mapData)
-    {
-        MarchingSquareMeshGen meshGen = MarchingSquareMeshGen.Instance;
-        if (m_is3D)
-            meshGen.CreateMesh3D(mapData, m_wallSize);
-        else
-            meshGen.CreateMesh2D(mapData);
-
-        GameObject mapGO = GameObject.Instantiate(m_mapPrefab);
-        mapGO.name = "Map";
-
-        if (meshGen.RoofMesh)
-        {
-            GameObject roofInstance = GameObject.Instantiate(m_roofPrefab);
-            roofInstance.GetComponent<MeshFilter>().sharedMesh = meshGen.RoofMesh;
-            roofInstance.transform.SetParent(mapGO.transform);
-        }
-
-        if (m_is3D && meshGen.EdgePaths3D != null)
-        {
-            GameObject wallInstance = GameObject.Instantiate(m_wallPrefab3D);
-            wallInstance.GetComponent<MeshFilter>().sharedMesh = meshGen.WallMesh;
-            wallInstance.transform.SetParent(mapGO.transform);
-        }
-        else if(!m_is3D && meshGen.EdgePaths2D!=null)
-        {
-            GameObject wallInstance = GameObject.Instantiate(m_wallPrefab2D);
-            PolygonCollider2D polygon = wallInstance.GetComponent<PolygonCollider2D>();
-
-            polygon.pathCount = meshGen.EdgePaths2D.Count;
-            for (int i = 0; i < meshGen.EdgePaths2D.Count; i++)
+            if (bigger < 2 * minAreaSize)
             {
-                polygon.SetPath(i, meshGen.EdgePaths2D[i].ToArray());
+                finishedAreas.Add(currArea);
             }
-            wallInstance.transform.SetParent(mapGO.transform);
-        }
+            else
+            {
+                int newBiggerCount1 = Random.Range(minAreaSize, bigger - minAreaSize);
+                int newBiggerCount2 = bigger - newBiggerCount1;
 
-        if (meshGen.FloorMesh)
-        {
-            GameObject floorInstance = GameObject.Instantiate(m_floorPrefab);
-            floorInstance.GetComponent<MeshFilter>().sharedMesh = meshGen.FloorMesh;
-            floorInstance.transform.SetParent(mapGO.transform);
+                MapArea newRoom1;
+                MapArea newRoom2;
+                if (areMoreCols)
+                {
+                    newRoom1 = new MapArea(mapData, currArea.RowStart, currArea.ColStart, smaller, newBiggerCount1);
+                    newRoom2 = new MapArea(mapData, currArea.RowStart, currArea.ColStart + newBiggerCount1, smaller, newBiggerCount2);
+                }
+                else
+                {
+                    newRoom1 = new MapArea(mapData, currArea.RowStart, currArea.ColStart, newBiggerCount1, smaller);
+                    newRoom2 = new MapArea(mapData, currArea.RowStart + newBiggerCount1, currArea.ColStart, newBiggerCount2, smaller);
+                }
+                unfinishedSet.Add(newRoom1);
+                unfinishedSet.Add(newRoom2);
+            }
         }
-        Map map = mapGO.GetComponent<Map>();
+        mapData.m_allAreas = finishedAreas;
+    }
+    private static void AddAreaEdges(MapData mapData, int areaEdgeSize)
+    {
+        foreach (var area in mapData.m_allAreas)
+        {
+            area.SetEdge(areaEdgeSize);
+        }
+    }
+    private static void AddRandom(MapData mapData, float fillChance)
+    {
+        foreach (var area in mapData.m_allAreas)
+        {
+            //...Fill with random...and walls
+            for (int row = 0; row < area.RowCount; row++)
+                for (int col = 0; col < area.ColCount; col++)
+                {
+                    if (!area.IsInAndInEdge(area.RowStart + row, area.ColStart + col))
+                        mapData.GetNode(area.RowStart + row, area.ColStart + col).m_type = (Random.Range(0, 100) < fillChance) ? MapNodeType.WALL : MapNodeType.EMPTY;
+                }
+        }
+    }
+    private static void CelularAutomata(MapData mapData, int iterCount)
+    {
+        foreach (var area in mapData.m_allAreas)
+        {
+            int currCount = 0;
+            while (currCount < iterCount)
+            {
+                for (int row = area.EdgeSize; (row + area.EdgeSize) < area.RowCount; row++)
+                    for (int col = area.EdgeSize; (col + area.EdgeSize) < area.ColCount; col++)
+                    {
+                        int currRow = area.RowStart + row;
+                        int currCol = area.ColStart + col;
+                        MapNode currNode = mapData.GetNode(currRow, currCol);
+
+                        int neigbourWallCount = 0;
+                        int neighbourEmptyCount = 0;
+
+                        for (int i = -1; i <= 1; i++)
+                            for (int j = -1; j <= 1; j++)
+                            {
+                                int neRow = currRow + i;
+                                int neCol = currCol + j;
+
+                                if (neRow == neCol || !area.IsInAndNotInEdge(neRow, neCol))
+                                    continue;
+
+                                if (mapData.GetNode(neRow, neCol).m_type == MapNodeType.WALL)
+                                    neigbourWallCount++;
+                                else
+                                    neighbourEmptyCount++;
+                            }
+
+                        if (neigbourWallCount > neighbourEmptyCount)
+                            currNode.m_type = MapNodeType.WALL;
+                        else if (neigbourWallCount < neighbourEmptyCount)
+                            currNode.m_type = MapNodeType.EMPTY;
+                    }
+                currCount++;
+            }
+        }
+    }
+
+
+
+
+
+    public static void DetectAndUpdateRooms(MapData mapData, int minRoomSize)
+    {
+        foreach (var area in mapData.m_allAreas)
+        {
+            bool doAgain = true;
+            while (doAgain)
+            {
+                doAgain = false;
+                DetectRoomsInArea(mapData, area);
+                foreach (Room room in area.m_allRooms)
+                    if (room.Size < minRoomSize)
+                    {
+                        doAgain = true;
+                        foreach (MapNode node in room.m_roomNodes)
+                            node.m_type = (node.m_type == MapNodeType.EMPTY) ? MapNodeType.WALL : MapNodeType.EMPTY;
+                    }
+            }
+
+            List<Room> finalRooms = new List<Room>();
+            foreach (Room room in area.m_allRooms)
+            {
+                if (room.m_roomType == MapNodeType.EMPTY)
+                    finalRooms.Add(room);
+            }
+            area.m_allRooms = finalRooms;
+        }
+    }
+    static void DetectRoomsInArea(MapData map, MapArea area)
+    {
+        List<Room> allRooms = new List<Room>();
+        HashSet<MapNode> checkedNodes = new HashSet<MapNode>();
+
+        for (int row = area.RowStart; row < area.RowEnd; row++)
+            for (int col = area.ColStart; col < area.ColEnd; col++)
+            {
+                MapNode currNode = map.GetNode(row, col);
+                if (checkedNodes.Contains(currNode))
+                    continue;
+
+                HashSet<MapNode> newRoomNodes = new HashSet<MapNode>();
+                Queue<MapNode> queuedNodes = new Queue<MapNode>();
+                queuedNodes.Enqueue(currNode);
+
+                while (queuedNodes.Count > 0)
+                {
+                    MapNode node = queuedNodes.Dequeue();
+                    if (checkedNodes.Contains(node))
+                        continue;
+                    newRoomNodes.Add(node);
+                    checkedNodes.Add(node);
+                    foreach (var neNode in map.Get4Neighbours(node.m_row, node.m_col))
+                        if (area.IsInArea(neNode.m_row, neNode.m_col) && !checkedNodes.Contains(neNode) && neNode.m_type == currNode.m_type)
+                            queuedNodes.Enqueue(neNode);
+                }
+                allRooms.Add(new Room(newRoomNodes, currNode.m_type, area, Random.ColorHSV()));
+            }
+        area.m_allRooms = allRooms;
+
+    }
+    static void ConnectAreaRooms(MapData map, MapArea area)
+    {
+        //TODO
+    }
+    public static void CreateMapGOs(Map map, MapData mapData)
+    {
         map.m_mapData = mapData;
-        map.is3D = m_is3D;
-        return map;
+
+        Mesh roofMesh = null;
+        Mesh wallMesh = null;
+        Mesh floorMesh = null;
+        List<List<Vector2>> edgePaths2D = null;
+
+        map.RoofMesh.sharedMesh = roofMesh;
+        map.WallMesh.sharedMesh = wallMesh;
+        map.FloorMesh.sharedMesh = floorMesh;
+
+        map.Collider2D.pathCount = edgePaths2D.Count;
+        for (int i = 0; i < edgePaths2D.Count; i++)
+            map.Collider2D.SetPath(i, edgePaths2D[i].ToArray());
     }
 
 }
