@@ -1,29 +1,30 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using math;
 
-namespace helper
+namespace mapGen
 {
     public static class MeshHelper
     {
-        public static void PolygonToMesh(MeshNodeBase[] meshNodes, List<Vector3> vertices, List<int> indices, HashSet<Edge<MeshNodeBase>>[] outlineEdgesSingleAndMultiple)
+        public static void PolygonToMesh(MSNodeBase[] meshNodes, List<Vector3> vertices, List<int> indices, HashSet<Edge<MSNodeBase>>[] outlineEdgesSingleAndMultiple)
         {
             if (meshNodes == null || meshNodes.Length < 3)
                 return;
 
             AssignPolygonVertices(meshNodes, vertices);
 
-            List<Triangle<MeshNodeBase>> triangles = new List<Triangle<MeshNodeBase>>();
+            List<Triangle<MSNodeBase>> triangles = new List<Triangle<MSNodeBase>>();
             for (int i = 0; i < meshNodes.Length - 2; i++)
             {
-                Triangle<MeshNodeBase> newTriangle = new Triangle<MeshNodeBase>(meshNodes[0], meshNodes[i + 1], meshNodes[i + 2]);
+                Triangle<MSNodeBase> newTriangle = new Triangle<MSNodeBase>(meshNodes[0], meshNodes[i + 1], meshNodes[i + 2]);
                 triangles.Add(newTriangle);
                 AssignTriangleIndices(newTriangle, indices);
                 DetectEdges(newTriangle, outlineEdgesSingleAndMultiple);
             }
         }
 
-        private static void AssignPolygonVertices(MeshNodeBase[] meshNodes, List<Vector3> vertices)
+        private static void AssignPolygonVertices(MSNodeBase[] meshNodes, List<Vector3> vertices)
         {
             foreach (var node in meshNodes)
             {
@@ -34,27 +35,27 @@ namespace helper
                 }
             }
         }
-        private static void AssignTriangleIndices(Triangle<MeshNodeBase> triangle, List<int> indices)
+        private static void AssignTriangleIndices(Triangle<MSNodeBase> triangle, List<int> indices)
         {
             indices.Add(triangle.a.m_index);
             indices.Add(triangle.b.m_index);
             indices.Add(triangle.c.m_index);
         }
 
-        static void DetectEdges(Triangle<MeshNodeBase> triangle, HashSet<Edge<MeshNodeBase>>[] outlineEdgesSingleAndMultiple)
+        static void DetectEdges(Triangle<MSNodeBase> triangle, HashSet<Edge<MSNodeBase>>[] outlineEdgesSingleAndMultiple)
         {
             CheckForOutlineEdge(triangle.AB, outlineEdgesSingleAndMultiple);
             CheckForOutlineEdge(triangle.BC, outlineEdgesSingleAndMultiple);
             CheckForOutlineEdge(triangle.CA, outlineEdgesSingleAndMultiple);
         }
-        static void CheckForOutlineEdge(Edge<MeshNodeBase> edge, HashSet<Edge<MeshNodeBase>>[] outlineEdgesSingleAndMultiple)
+        static void CheckForOutlineEdge(Edge<MSNodeBase> edge, HashSet<Edge<MSNodeBase>>[] outlineEdgesSingleAndMultiple)
         {
             if (outlineEdgesSingleAndMultiple[0].Contains(edge))
             {
                 outlineEdgesSingleAndMultiple[0].Remove(edge);
                 outlineEdgesSingleAndMultiple[1].Add(edge);
             }
-            else if (!outlineEdgesSingleAndMultiple[1].Contains(edge))
+            else
                 outlineEdgesSingleAndMultiple[0].Add(edge);
         }
     }

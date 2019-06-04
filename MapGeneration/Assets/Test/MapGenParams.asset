@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4579c45fc8076964da94fe917bd79e04, type: 3}
+  m_Name: MapGenParams
+  m_EditorClassIdentifier: 
+  m_rowCount: 20
+  m_colCount: 20
+  m_nodeSize: 0.5
+  DoPartion: 0
+  minPartitionSize: 25
+  DoEdges: 1
+  edgeSize: 2
+  DoAddRandom: 1
+  fillChance: 47.5
+  DoCellularAutomata: 1
+  cellAutomataIterCount: 5
+  Is3D: 0
+  wallSize: 2.5
